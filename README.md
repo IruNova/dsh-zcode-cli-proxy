@@ -95,6 +95,9 @@ node scripts/sync-vendor.mjs [客户端resources/glm路径]   # 不带参数则�
    **`zcodejwttoken`**（`oauth:zai:access_token` 已过期，回它上游 401）。agent 自己算 coding-plan 请求签名，能过 WAF；
 5. `session/event` 的事件类型在 **params.type 顶层**（不是 payload.type），`turn.failed` 也要处理，
    `replayState` 里不能有 `undefined` 字段（lossless JSON 校验会炸）。
+6. **模型参数不写死**：DSH 侧的 contextWindow / max_tokens 按 builtin 配置（`zcode-builtin.json`
+   的 `modelConfigRules.modelRules`，CLI 同款 overlay + 大小写敏感全串匹配语义）现算生效值 ——
+   GLM-5.3 系实际是 1M 上下文，写死 200k 会差 5 倍（DSH 会提前压缩历史、低估输出预算）。
 
 > HTTP 直连计划端点会被阿里云无痕验证拦（3007/3012）——只有 agent 二进制自己发的签名请求能过，
 > 所以「反代」的形态是托管 agent 进程而不是自建 HTTP 网关。
