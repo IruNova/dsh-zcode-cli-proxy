@@ -13,11 +13,14 @@ provider `zcode-cli` 走 GUI 同款的常驻 app-server 会话，插件把 ZCode
 >    OAuth 授权（见下文「登录」）；
 > 2. **脱安装**：`vendor/zcode/` 内置 ZCode agent 运行时（zcode.cjs + builtin 配置种子），
 >    本机不再需要安装 ZCode 客户端（详见下文「脱安装运行」）；
-> 2. **模型参数不再写死**：contextWindow / maxOutputTokens 按 builtin 配置（CLI 同款
+> 3. **模型参数不再写死**：contextWindow / maxOutputTokens 按 builtin 配置（CLI 同款
 >    overlay + 大小写敏感匹配语义）现算生效值 —— 上游硬编码的 `200000 / 64000` 与
->    实机差数倍（GLM-5.3 系实际 1M 上下文），DSH 会因此提前压缩历史、低估输出预算
+>    实机差数倍（GLM-5.3 系实际 1M / 128k），DSH 会因此提前压缩历史、低估输出预算
 >    （此项修正与 [tangyixiao/dsh-zcode-plan-bridge](https://github.com/tangyixiao/dsh-zcode-plan-bridge)
->    的实测结论一致，一并致谢；其针对 npm 版 CLI 的其余改动与本仓库的桌面客户端通道不冲突）。
+>    的实测结论一致，一并致谢；其针对 npm 版 CLI 的其余改动与本仓库的桌面客户端通道不冲突）；
+> 4. **模型清单与推理档位**（0.6.0）：默认暴露 GLM-5.3 / GLM-5.3-Flash / GLM-5.2 / GLM-5-Turbo，
+>    每个模型的推理档位（reasoningLevel）在 DSH 模型选择器里可调（实测校验集直通，
+>    会话中途换档自动重切）—— 上游只硬编码 GLM-5.3-Flash 且写死 max 档；
 > 遵循 AGPL-3.0，改动基于上游逆向成果，版权归上游作者。
 
 > **原 zcode2api 网关已移除（2026-09-30）**：本插件最初是
@@ -55,6 +58,24 @@ DSH 设置 → 模型（Models）→ 提供方 **ZCode Start Plan（客户端反
 - **设置页内登录**（见下「登录」）：无需命令行，任何设备的浏览器完成授权
 - **本机无需安装 ZCode 客户端**：插件内置了从客户端拷出的 agent 运行时（`vendor/zcode/zcode.cjs`），
   自动探测不到本机客户端时直接用它（见下「脱安装运行」）；本机装了客户端则优先用客户端自带的
+
+## 可用模型与推理档位（0.6.0 起）
+
+默认模型清单（DSH 模型选择器直接可选，且每个模型都能调推理档位）：
+
+| DSH 模型 id | Start Plan 执行模型 | 上下文 | max 输出 | 可选推理档位 |
+|---|---|---|---|---|
+| `glm-5.3` | GLM-5.3 | 1M | 128k | low / high / max |
+| `glm-5.3-flash` | GLM-5.3-Flash | 1M | 128k | low / high / max |
+| `glm-5.2` | GLM-5.2 | 1M | 128k | disabled / high / max |
+| `glm-5-turbo` | GLM-5-Turbo | 200k | 64k | disabled / enabled |
+
+- 上下文 / max 输出按客户端 builtin 配置现算；推理档位是 `session/setModel` 的**实测校验集**
+  （桌面 CLI 0.17.0 · Start Plan 通道，逐档探测得出——注意它和 builtin 配置里的通用规则不同）；
+- 档位链路：DSH 模型选择器选档 → `GenerateOptions.reasoningEffort` → 适配器映射为
+  `session/setModel` 的 `options.reasoningLevel`；会话中途换模型/换档自动重切；
+- 想加别的条目在 `cliModels` 里配置：`startPlanModelId` 指到执行模型，
+  `reasoningLevels`（可选档位表，低→高）与 `reasoningLevel`（默认档）可覆盖实测表。
 
 ## 登录（两种方式）
 
