@@ -14,7 +14,7 @@ provider `zcode-cli` 走 GUI 同款的常驻 app-server 会话，插件把 ZCode
 
 ```
 DSH Agent ──► provider "zcode-cli" ──► ZcodeAppServerAdapter
-                                            │  spawn zcode.cjs app-server --stdio（常驻）
+                                            │  spawn zcode.cjs app-server --stdio（常驻；内置 vendor/zcode/ 副本或客户端自带）
                                             ├─ provider/updateAccountConfig   注入 Start Plan 账户
                                             ├─ session/setModel               切到 Start Plan
                                             ├─ session/send                   发回合（真流式）
@@ -39,8 +39,36 @@ DSH 设置 → 模型（Models）→ 提供方 **ZCode Start Plan（客户端反
 - 真流式（text/reasoning delta 直接转发）、工具调用、图片输入（图片以本地文件随消息附上，agent 用 Read 读图）
 - 多轮会话按 DSH 的 sessionId 复用 app-server 会话
 - 会话标题这类辅助调用在本地生成，不消耗额度
-- 前置条件：本机装着 ZCode 客户端（自动探测 `%LOCALAPPDATA%\Programs\ZCode\resources\glm\zcode.cjs`），
-  且客户端已登录拥有 Start Plan 额度的账号
+- **本机无需安装 ZCode 客户端**：插件内置了从客户端拷出的 agent 运行时（`vendor/zcode/zcode.cjs`），
+  自动探测不到本机客户端时直接用它（见下「脱安装运行」）；本机装了客户端则优先用客户端自带的
+- 前置条件只剩一条：有 Start Plan 额度的账号凭证（`~/.zcode/v2/credentials.json` 里的 `zcodejwttoken`，
+  客户端登录过、或用内置 CLI 跑一次 `node vendor/zcode/zcode.cjs login` 生成）
+
+## 脱安装运行（不再依赖本机装 ZCode 客户端）
+
+`vendor/zcode/` 内置了 ZCode 桌面客户端 `resources/glm/` 里的 agent 运行时：
+
+| 文件 | 作用 |
+|------|------|
+| `zcode.cjs` | ZCode CLI agent 运行时（app-server 通道的宿主进程），plain node ≥ 22.5 即可运行（实测 0.17.0；node:sqlite 依赖） |
+| `zcode-builtin.json` | builtin provider 配置种子（Start Plan 注入的 configSource / basedOn 依据） |
+| `manifest.json` | 来源、版本与 sha256 |
+
+工作方式：
+
+- `zcodeCliPath` 留空时依次探测：本机客户端（Windows/macOS/Linux 常见安装路径）→ 插件内置副本；
+- `~/.zcode/v2/runtime/provider/` 下没有 `zcode-builtin.json`（客户端没跑过）时，builtin 配置回落到内置种子；
+- 本机连 node 都没有时，回落到宿主进程自己的运行时（DSH 桌面版是 Electron，以 `ELECTRON_RUN_AS_NODE=1` 当 node 用）；
+- 客户端 `resources/glm/packages/` 下的官方插件（browser-use、node-repl-host 等，100MB+）**不内置**：
+  缺失时对应工具优雅降级，app-server 基础链路（会话 / 真流式 / Bash、Read 等原生工具）不受影响。
+
+更新内置运行时（ZCode 客户端升级后）：
+
+```
+node scripts/sync-vendor.mjs [客户端resources/glm路径]   # 不带参数则自动探测
+```
+
+> 不想用内置副本（比如要强制跟客户端走）就把配置项 `allowBundledRuntime` 关掉。
 
 ## 安全须知（装之前必读）
 
@@ -103,8 +131,9 @@ node test\turn-lock.mjs        # 撞锁自愈 / 串行化 / 中止补刀 / 重�
 | 字段 | 默认 | 说明 |
 |------|------|------|
 | `enabled` | `true` | 总开关 |
-| `zcodeCliPath` | 自动探测 | ZCode 客户端自带的 zcode.cjs 路径 |
-| `zcodeCliNode` | `node` | 运行 zcode.cjs 的 node 可执行文件 |
+| `zcodeCliPath` | 自动探测 | ZCode 客户端自带的 zcode.cjs 路径；留空 = 先探测本机客户端，再回落插件内置副本 |
+| `zcodeCliNode` | `node` | 运行 zcode.cjs 的 node 可执行文件；本机没有 node 时自动改用宿主运行时（Electron 以 ELECTRON_RUN_AS_NODE 模式） |
+| `allowBundledRuntime` | `true` | 允许使用插件内置的 ZCode 运行时（vendor/zcode/），本机没装客户端也能跑 |
 | `cliModels` | `glm-5.3-flash` | provider `zcode-cli` 暴露给 DSH 的模型清单；`startPlanModelId` 字段把条目映射到真实的 Start Plan 执行模型（缺省 `GLM-5.3-Flash`） |
 | `cliCwd` | 空 | app-server 会话的工作目录；留空 = 用户主目录 |
 | `injectStartPlanAccount` | `true` | 把 Start Plan 账户注入 agent（GUI 同款） |
@@ -139,9 +168,11 @@ file:// URL 加 `?v=N`：
 ```
 lib/index.js        插件装配：Config schema、provider 注册
 lib/app-server.js   app-server 通道：JSON-RPC 客户端 + LlmAdapter（Start Plan 注入/鉴权/事件流）
+lib/bundled.js      内置运行时（vendor/zcode/）的路径与 manifest 读取
 lib/messages.js     共用消息工具：图片落盘、对话拍平
 lib/credentials.js  解密 ~/.zcode/v2/credentials.json，取 Start Plan token
-scripts/            Start Plan 通道的逆向探测脚本（probe-*.cjs）
+vendor/zcode/       内置的 ZCode agent 运行时（zcode.cjs + builtin 配置种子 + manifest）
+scripts/            Start Plan 通道的逆向探测脚本（probe-*.cjs）；sync-vendor.mjs 更新内置运行时
 test/               app-server 通道与凭证解密的验证脚本
                     turn-lock.mjs + fake-app-server.cjs：回合锁自愈的回归测试
 ```

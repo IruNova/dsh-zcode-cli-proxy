@@ -1,0 +1,6 @@
+{
+  "runtime": "electron-node",
+  "entry": "zcode.cjs",
+  "platform": "linux-x64",
+  "source": "apps/zcode-cli/packages/cli/dist/zcode.cjs"
+}

@@ -1,0 +1,21 @@
+{
+  "description": "插件内置的 ZCode agent 运行时（来自 ZCode 桌面客户端，脱安装运行用）",
+  "source": "ZCode 桌面客户端 resources/glm/（Windows: %LOCALAPPDATA%\\Programs\\ZCode\\resources\\glm，Linux: /opt/ZCode/resources/glm，macOS: /Applications/ZCode.app/Contents/Resources/glm）",
+  "cliVersion": "0.17.0",
+  "builtinRevision": 33,
+  "builtinEndpointKey": "endpoint-78d7c3bef4024722642626fe3669a799",
+  "files": {
+    "zcode.cjs": {
+      "role": "ZCode CLI agent 运行时（app-server 通道的宿主进程）",
+      "sha256": "97490d0f06a7a225d54d47817acf4b4859cdb268b59f2490caaeda982bef063a"
+    },
+    "zcode-builtin.json": {
+      "role": "builtin provider 配置种子（Start Plan 注入的 configSource / basedOn 依据）",
+      "sha256": "67a299ffb193ca8fd196379c386161495af2d100aa180dd88b53171892111078"
+    }
+  },
+  "notes": [
+    "客户端 resources/glm/packages/ 下的官方插件（browser-use、node-repl-host 等）未内置：缺失时对应工具优雅降级，app-server 基础链路（会话 / 流式 / 原生工具）不受影响。",
+    "更新内置运行时：node scripts/sync-vendor.mjs（从本机已装的 ZCode 客户端重新拷贝）。"
+  ]
+}
