@@ -7,6 +7,16 @@ provider `zcode-cli` 走 GUI 同款的常驻 app-server 会话，插件把 ZCode
 
 仓库：<https://github.com/kyle123740/dsh-zcode-cli-proxy>
 
+> **本仓库（IruNova 修改版）相对上游的改动**：
+> 1. **脱安装**：`vendor/zcode/` 内置 ZCode agent 运行时（zcode.cjs + builtin 配置种子），
+>    本机不再需要安装 ZCode 客户端（详见下文「脱安装运行」）；
+> 2. **模型参数不再写死**：contextWindow / maxOutputTokens 按 builtin 配置（CLI 同款
+>    overlay + 大小写敏感匹配语义）现算生效值 —— 上游硬编码的 `200000 / 64000` 与
+>    实机差数倍（GLM-5.3 系实际 1M 上下文），DSH 会因此提前压缩历史、低估输出预算
+>    （此项修正与 [tangyixiao/dsh-zcode-plan-bridge](https://github.com/tangyixiao/dsh-zcode-plan-bridge)
+>    的实测结论一致，一并致谢；其针对 npm 版 CLI 的其余改动与本仓库的桌面客户端通道不冲突）。
+> 遵循 AGPL-3.0，改动基于上游逆向成果，版权归上游作者。
+
 > **原 zcode2api 网关已移除（2026-09-30）**：本插件最初是
 > [liu5269/zcode2api](https://github.com/liu5269/zcode2api)（ZCode 额度 → Anthropic Messages API
 > 网关 + 账号池）的 DSH 集成。网关、账号池工具与一次性 CLI 通道已从本插件删除；
