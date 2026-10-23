@@ -8,7 +8,10 @@ provider `zcode-cli` 走 GUI 同款的常驻 app-server 会话，插件把 ZCode
 仓库：<https://github.com/kyle123740/dsh-zcode-cli-proxy>
 
 > **本仓库（IruNova 修改版）相对上游的改动**：
-> 1. **脱安装**：`vendor/zcode/` 内置 ZCode agent 运行时（zcode.cjs + builtin 配置种子），
+>
+> 1. **设置页内登录**（0.5.0）：插件设置页里的「ZCode 账号登录」面板，任意设备的浏览器完成
+>    OAuth 授权（见下文「登录」）；
+> 2. **脱安装**：`vendor/zcode/` 内置 ZCode agent 运行时（zcode.cjs + builtin 配置种子），
 >    本机不再需要安装 ZCode 客户端（详见下文「脱安装运行」）；
 > 2. **模型参数不再写死**：contextWindow / maxOutputTokens 按 builtin 配置（CLI 同款
 >    overlay + 大小写敏感匹配语义）现算生效值 —— 上游硬编码的 `200000 / 64000` 与
@@ -36,8 +39,8 @@ DSH Agent ──► provider "zcode-cli" ──► ZcodeAppServerAdapter
 
 | | |
 | --- | --- |
-| **实测通过** | DSH **2.0 桌面版 0.2.1-rc.2**（对照自带核心逐个核过：`ctx.llm.registerAdapter` / `registerConfigurableProviders`、`RetryPolicySchema` / `resolveRetryPolicy`、`ctx.get('attachments')` 均在位、签名未变；`turn-lock` 21/21 全绿）；以及 0.2.0-rc.2、0.1.7 线（cordis 4.0.5 / schemastery 3.18.5） |
-| **声明范围** | `dsh = ^0.1.5-rc.1 \|\| ^0.1.7-rc.2 \|\| ^0.2.0-rc.1 \|\| ^0.2.1-rc.1`（写在 `package.json` 的 `dsh.engines.dsh`） |
+| **实测通过** | DSH **2.0 桌面版 0.2.1-rc.2**（对照自带核心逐个核过：`ctx.llm.registerAdapter` / `registerConfigurableProviders`、`RetryPolicySchema` / `resolveRetryPolicy`、`ctx.get('attachments')` 均在位、签名未变；`turn-lock` 21/21 全绿）；以及 0.2.0-rc.2、0.1.7 线（cordis 4.0.5 / schemastery 3.18.5）。设置页登录在 0.2.1-rc.2 实机网页端全链路验证（面板渲染 → 发起 → 状态实时回写）；volatile 表单机制在 0.2.0-rc.2 的 `dsh-settings` 里逐字核对过，同一套实现 |
+| **声明范围** | `dsh = ^0.1.5-rc.1 \|\| ^0.1.7-rc.2 \|\| ^0.2.0-rc.1 \|\| ^0.2.0-rc.2 \|\| ^0.2.1-rc.1 \|\| ^0.2.1-rc.2 \|\| ^0.2.1-rc.3`（写在 `package.json` 的 `dsh.engines.dsh`；覆盖 0.2.0-rc.2 → 0.2.1-rc.3） |
 | **为什么不是一个 `>=`** | 预发布版本的 semver 规则很严：`>=0.1.5-rc.1` 对 `0.2.1-rc.2` 求值是 **false**（只有带同一 `major.minor.patch` 的比较项才接纳预发布版）。所以按线枚举，而不是写开区间 |
 
 ## 用法
@@ -49,10 +52,36 @@ DSH 设置 → 模型（Models）→ 提供方 **ZCode Start Plan（客户端反
 - 真流式（text/reasoning delta 直接转发）、工具调用、图片输入（图片以本地文件随消息附上，agent 用 Read 读图）
 - 多轮会话按 DSH 的 sessionId 复用 app-server 会话
 - 会话标题这类辅助调用在本地生成，不消耗额度
+- **设置页内登录**（见下「登录」）：无需命令行，任何设备的浏览器完成授权
 - **本机无需安装 ZCode 客户端**：插件内置了从客户端拷出的 agent 运行时（`vendor/zcode/zcode.cjs`），
   自动探测不到本机客户端时直接用它（见下「脱安装运行」）；本机装了客户端则优先用客户端自带的
-- 前置条件只剩一条：有 Start Plan 额度的账号凭证（`~/.zcode/v2/credentials.json` 里的 `zcodejwttoken`，
-  客户端登录过、或用内置 CLI 跑一次 `node vendor/zcode/zcode.cjs login` 生成）
+
+## 登录（两种方式）
+
+**方式一：DSH 设置页内登录（推荐，0.5.0 起）**
+
+装好插件后打开 **DSH 侧边栏 → 插件 → dsh-zcode-cli-proxy**，页面顶部是「ZCode 账号登录」面板：
+
+1. 点 **开始登录** —— 插件随即向 Z.AI 发起授权，页面实时出现「授权链接」；
+2. 用**任意设备**的浏览器打开该链接完成确认（手机也行 —— 授权回调落在 zcode.z.ai 服务端，
+   不要求浏览器与 DSH 同机；链接约 10 分钟内有效）；
+3. 确认后面板显示「✅ 登录成功」，凭证写入 `~/.zcode/v2/credentials.json`，**立即生效、无需重启**。
+   「取消」中止进行中的登录；「退出登录」清除共享凭证里的 Z.AI 登录。
+
+面板字段（`login` / `loginState` / `loginUrl`）是 volatile 配置字段：只承载登录交互，
+选择动作并保存即触发，不会导致插件重启。
+
+**方式二：命令行登录**
+
+```
+npx dsh-zcode-login
+# 或：node <本插件目录>/bin/dsh-zcode-login.mjs
+```
+
+它会用内置运行时打印授权链接（无头环境下复制链接到任意浏览器打开即可）。
+凭证同样落在 `~/.zcode/v2/credentials.json`。
+
+> 两种方式等价，任选其一；登录状态在面板上以 `loginState` 呈现。
 
 ## 脱安装运行（不再依赖本机装 ZCode 客户端）
 
@@ -154,6 +183,8 @@ node test\turn-lock.mjs        # 撞锁自愈 / 串行化 / 中止补刀 / 重�
 | `childEnvAllow` | `[]` | 额外透传给 app-server 子进程的环境变量名（默认只透传系统基础变量、`ZCODE_*` 与 `NODE_EXTRA_CA_CERTS`） |
 | `appServerTimeoutMs` | `120000` | app-server 单次请求超时（毫秒） |
 | `zcodeCliTimeoutMs` | `900000` | app-server 单回合超时（毫秒） |
+| `login` | `idle` | volatile 登录动作（设置页面板用）：`start` / `cancel` / `logout`，保存即触发 |
+| `loginState` / `loginUrl` | 空 | volatile 登录状态与授权链接（插件自动写入，面板展示） |
 
 ## 开发：改了代码怎么生效
 
@@ -179,16 +210,22 @@ file:// URL 加 `?v=N`：
 ## 目录结构
 
 ```
-lib/index.js        插件装配：Config schema、provider 注册
+lib/index.js        插件装配：Config schema、provider 注册、登录面板宿主端
 lib/app-server.js   app-server 通道：JSON-RPC 客户端 + LlmAdapter（Start Plan 注入/鉴权/事件流）
+lib/login.js        Z.AI 登录引擎（CLI 同款 OAuth 协议：init → 授权链接 → 轮询 → 写凭证）
+lib/client.js       网页客户端半边：插件设置页里的登录面板（plugins.bundle.config 槽）
 lib/bundled.js      内置运行时（vendor/zcode/）的路径与 manifest 读取
 lib/messages.js     共用消息工具：图片落盘、对话拍平
-lib/credentials.js  解密 ~/.zcode/v2/credentials.json，取 Start Plan token
+lib/credentials.js  ~/.zcode/v2/credentials.json 的读解密 / 写加密
 vendor/zcode/       内置的 ZCode agent 运行时（zcode.cjs + builtin 配置种子 + manifest）
+bin/                dsh-zcode-login：命令行登录入口
 scripts/            Start Plan 通道的逆向探测脚本（probe-*.cjs）；sync-vendor.mjs 更新内置运行时
 test/               app-server 通道与凭证解密的验证脚本
                     turn-lock.mjs + fake-app-server.cjs：回合锁自愈的回归测试
 ```
+
+> 普通配置项（`zcodeCliPath` / `cliModels` 等）不走设置表单（DSH 设置表单只暴露 volatile
+> 字段），按 DSH 常规方式编辑 profile 的 cordis 配置；登录交互才在设置页里进行。
 
 ## 许可
 
