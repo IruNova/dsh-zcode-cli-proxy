@@ -22,6 +22,14 @@ DSH Agent ──► provider "zcode-cli" ──► ZcodeAppServerAdapter
                                                   └──► zcode.z.ai/api/v1/zcode-plan/anthropic
 ```
 
+## 适配版本
+
+| | |
+| --- | --- |
+| **实测通过** | DSH **2.0 桌面版 0.2.1-rc.2**（对照自带核心逐个核过：`ctx.llm.registerAdapter` / `registerConfigurableProviders`、`RetryPolicySchema` / `resolveRetryPolicy`、`ctx.get('attachments')` 均在位、签名未变；`turn-lock` 21/21 全绿）；以及 0.2.0-rc.2、0.1.7 线（cordis 4.0.5 / schemastery 3.18.5） |
+| **声明范围** | `dsh = ^0.1.5-rc.1 \|\| ^0.1.7-rc.2 \|\| ^0.2.0-rc.1 \|\| ^0.2.1-rc.1`（写在 `package.json` 的 `dsh.engines.dsh`） |
+| **为什么不是一个 `>=`** | 预发布版本的 semver 规则很严：`>=0.1.5-rc.1` 对 `0.2.1-rc.2` 求值是 **false**（只有带同一 `major.minor.patch` 的比较项才接纳预发布版）。所以按线枚举，而不是写开区间 |
+
 ## 用法
 
 DSH 设置 → 模型（Models）→ 提供方 **ZCode Start Plan（客户端反代）** → 模型 `GLM-5.3-Flash (ZCode CLI)`。
