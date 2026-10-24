@@ -18,6 +18,7 @@ provider `zcode-cli` 走 GUI 同款的常驻 app-server 会话，插件把 ZCode
 >    实机差数倍（GLM-5.3 系实际 1M / 128k），DSH 会因此提前压缩历史、低估输出预算
 >    （此项修正与 [tangyixiao/dsh-zcode-plan-bridge](https://github.com/tangyixiao/dsh-zcode-plan-bridge)
 >    的实测结论一致，一并致谢；其针对 npm 版 CLI 的其余改动与本仓库的桌面客户端通道不冲突）；
+> 5. **纯直连通道**（0.7.0）：provider `zcode-direct`，Anthropic Messages 协议直发 Start Plan 端点——DSH 原生工具/权限/系统提示全生效，无 agent 的 12k 提示词开销（实现要点见下文「两条通道」；请求形状与设备绑定的逆向结论与 [magpie-community/plugins](https://github.com/magpie-community/plugins) 包 zcode 一致，致谢）;
 > 4. **模型清单与推理档位**（0.6.0）：默认暴露 GLM-5.3 / GLM-5.3-Flash / GLM-5.2 / GLM-5-Turbo，
 >    每个模型的推理档位（reasoningLevel）在 DSH 模型选择器里可调（实测校验集直通，
 >    会话中途换档自动重切）—— 上游只硬编码 GLM-5.3-Flash 且写死 max 档；
@@ -58,6 +59,25 @@ DSH 设置 → 模型（Models）→ 提供方 **ZCode Start Plan（客户端反
 - **设置页内登录**（见下「登录」）：无需命令行，任何设备的浏览器完成授权
 - **本机无需安装 ZCode 客户端**：插件内置了从客户端拷出的 agent 运行时（`vendor/zcode/zcode.cjs`），
   自动探测不到本机客户端时直接用它（见下「脱安装运行」）；本机装了客户端则优先用客户端自带的
+
+## 两条通道：直连（0.7.0 起）与 agent
+
+插件注册**两个 provider**，模型列表里二选一：
+
+| provider | 形态 | 特点 |
+|---|---|---|
+| `zcode-direct`（默认启用） | **纯直连**：Anthropic Messages 协议直发 Start Plan 端点，无 agent | DSH 的系统提示、工具、权限体系**原生生效**（结构化 tool_use 直接回 DSH 执行）；请求开销 ~1.5k tokens（无 agent 工具包）；会话标题本地生成 |
+| `zcode-cli` | 托管 agent（上游原形态） | agent 的 Bash/Read 等原生工具在 agent 沙箱内执行（DSH 看不到）；每轮固定 ~12k 系统提示开销；工具不受 DSH 权限边界管 |
+
+直连通道的实现要点（逆向自 ZCode 3.16.3 运行时的真实请求，与本仓库直连实验逐项验证）：
+
+- system 恰好三块：块 0/1 **逐字节**等于 ZCode 原文（`lib/zcode-prompt.js` 快照），块 3 = 动态环境段 + DSH 的系统提示；第四块直接 405/3012；
+- 头集精确等于 ZCode 3.16.3（只有 `Authorization: Bearer <zcodejwttoken>`，agent/SDK 注入的 `anthropic-beta`、`x-stainless-*` 等一律不发）；
+- 首条用户消息是 `<system-reminder>` 当天日期；`metadata.user_id` 带持久化的设备号（首次生成，`X-Device-Mid` 同源）；
+- start-plan 通道**无需任何签名**（V4 签名只服务 API-key 型 coding-plan 通道）；
+- 推理档位：DSH 模型选择器的档位直通为 `thinking` + `output_config.effort`（GLM-5.3 系始终思考，不支持关闭——端点 1210 错误）。
+
+> 直连通道的请求形状要求来自端点侧的强校验；ZCode 升级后形状若变，直连会以 405/3012 报错（错误信息带指引，可退回 agent 通道）。
 
 ## 可用模型与推理档位（0.6.0 起）
 
